@@ -22,6 +22,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"syscall"
 
@@ -364,6 +365,17 @@ func (h *DefaultPluginHandler) Lookup(filename string) (string, bool) {
 
 // Execute implements PluginHandler
 func (h *DefaultPluginHandler) Execute(executablePath string, cmdArgs, environment []string) error {
+	if runtime.GOOS == "windows" {
+		var procAttr os.ProcAttr
+		procAttr.Env = environment
+		procAttr.Files = []*os.File{os.Stdin, os.Stdout, os.Stderr}
+
+		var p, err = os.StartProcess(executablePath, cmdArgs, &procAttr)
+		_, err = p.Wait()
+
+		return err
+	}
+
 	return syscall.Exec(executablePath, cmdArgs, environment)
 }
 
@@ -403,6 +415,8 @@ func HandlePluginCommand(pluginHandler PluginHandler, cmdArgs []string) error {
 	if err := pluginHandler.Execute(foundBinaryPath, append([]string{foundBinaryPath}, cmdArgs[len(remainingArgs):]...), os.Environ()); err != nil {
 		return err
 	}
+
+	os.Exit(0)
 
 	return nil
 }
